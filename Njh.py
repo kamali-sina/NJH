@@ -3,6 +3,7 @@ from time import time
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from math import exp, log
 
 class Njh:
     def __init__(self, corpus_path, tuple_list=None, alpha=1, window_size=[1,0]):
@@ -48,19 +49,35 @@ class Njh:
         records = context_ref.to_records(index=False)
         all_contexts = np.array(records)
         self.unique_contexts, self.unique_contexts_count = (np.unique(all_contexts, return_counts = True))
+        self.exp_sum_value = 0
+        number_of_contexts = len(self.context_holder)
+        for i in range(self.unique_contexts):
+            self.exp_sum_value += self._calculate_exp_log(i, number_of_contexts)
+
+    def _calculate_exp_log(self, context_index, number_of_contexts):
+        p_context = self.unique_contexts_count[context_index] / number_of_contexts
+        return exp(1) ** (log(p_context / self.alpha))
+
+    def _get_count_of_word(self, word):
+        try:
+            return self.uniques_count[self.uniques.index(word)]
+        except:
+            return 0
 
     def _fill_ws_dict(self):
         self.ws_dict = {}
         if (self.tuple_list):
-            #TODO: fill here
-            using_tuples = True
+            for tup in tqdm(self.tuple_list):
+                word_dict = self.ws_dict.get(tup[0], {})
+                word_dict[tup[1]] = self._calculate_similarity(tup[0], tup[1], self._get_count_of_word(tup[0]), self._get_count_of_word[tup[1]])
+                self.ws_dict[tup[0]] = word_dict
         else:
             for word_index in range(len(self.uniques)):
                 word = self.uniques[word_index]
                 word_dict = {}
                 for second_word_index in tqdm(range(len(self.uniques))):
                     second_word = self.uniques[second_word_index]
-                    word_dict[second_word] = self._calculate_similarity(word_index, second_word_index)
+                    word_dict[second_word] = self._calculate_similarity(word, second_word, self.uniques_count[word_index], self.uniques_count[second_word_index])
                 self.ws_dict[word] = word_dict
 
     def _calculate_N(self, w1, context_index):
@@ -72,17 +89,23 @@ class Njh:
         return N
 
     def _calculate_conditional_P(self, w1, context_index):
-        #TODO: code here
         """Calculates P(w1|context)"""
         N_w1_context = self._calculate_N(w1, context_index)
         N_context = self.unique_contexts_count[context_index]
         return (N_w1_context / N_context)
-
-    def _calculate_similarity(self, w1_index, w2_index):
-        #TODO: code here
+    
+    def _calculate_similarity(self, w1, w2, n_w1, n_w2):
         """Calculates S(w1,w2)"""
-        self._calculate_conditional_P(self.uniques[w1_index], 800)
-        
+        p1 = n_w1 / len(self.corpus)
+        p2 = n_w2 / len(self.corpus)
+        number_of_contexts = len(self.context_holder)
+        similarily = float(0)
+        for i in range(len(self.unique_contexts)):
+            cond_p1 = self._calculate_conditional_P(w1, i)
+            cond_p2 = self._calculate_conditional_P(w2, i)
+            val1 = self._calculate_exp_log(i, number_of_contexts)
+            similarily += (cond_p1/p1) * (cond_p2/p2) * (val1/self.exp_sum_value)
+        return similarily
 
 x = time()
 Njh('./corpus.txt', window_size=[1,1])
